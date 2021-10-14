@@ -1,5 +1,9 @@
 # replace
-Easy to use cross-platform regex replace command line util
+Easy to use cross-platform regex replace command line util.
+Can't remember the arguments to the `find` command? or how `xargs` works?
+Maybe `sed` is a little different on your Mac than in Linux?
+
+Forget all that stuff and just `replace string newval **/*.dart`
 
 ### Installing
 `pub global activate replace`
