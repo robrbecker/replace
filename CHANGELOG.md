@@ -1,3 +1,7 @@
+## [1.0.1] - 2021-10-13
+### Updated
+- Updated readme
+
 ## [1.0.0] - 2021-10-13
 ### Added
 - Initial Version

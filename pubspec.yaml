@@ -1,5 +1,5 @@
 name: replace
-version: 1.0.0
+version: 1.0.1
 description: An easy to use cross-platform regex replace command line util.
 repository: https://github.com/robrbecker/replace
 
