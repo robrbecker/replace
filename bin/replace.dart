@@ -3,6 +3,7 @@ import 'package:cli_script/cli_script.dart';
 import 'package:file/local.dart';
 import 'package:glob/glob.dart';
 
+const bool askForConfirmation = false;
 const List<String> allowedDotfiles = [
   '.gitignore',
   '.pubignore',
@@ -42,11 +43,13 @@ If you specify a directory, it will match ALL files in that directory recursivel
   }
 
   // Ask for confirmation
-  for (var f in files) {
-    print(f);
+  if (askForConfirmation) {
+    for (var f in files) {
+      print(f);
+    }
+    print('Continue?');
+    stdin.readLineSync();
   }
-  print('Continue?');
-  stdin.readLineSync();
 
   var transformer = replace(regexp, replacement, all: true, caseSensitive: false);
   for (var f in files) {

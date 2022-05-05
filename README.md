@@ -15,9 +15,8 @@ It ignores dotfiles (especially the .git directory) except these
   - .travis.yml
   - .travis.yaml
 
-If you need to replace in these files, you can submit a PR to this repo to
-allow it or work around it by renaming the file, replacing, and renaming
-it back.
+If you need to replace in dotfiles other than these, you can submit a PR to this repo to
+allow it or work around it by renaming the file, replacing, and renaming it back.
 
 ### Installing
 `pub global activate replace`
