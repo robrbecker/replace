@@ -11,11 +11,11 @@ const List<String> allowedDotfiles = [
   '.travis.yaml',
 ];
 
-void main(List<String> args) async {
+void main(List<String> origArgs) async {
   var usage = '''replace <regexp> <replacement> <glob_file_or_dir> ...
 If you specify a directory, it will match ALL files in that directory recursively. Use with caution.
 ''';
-
+  var args = <String>[]..addAll(origArgs);
   if (args.length < 3) {
     print(usage);
     return;
@@ -34,7 +34,9 @@ If you specify a directory, it will match ALL files in that directory recursivel
         }
       }
     } else {
-      for (var f in await Glob(arg, recursive: true).listFileSystem(const LocalFileSystem()).toList()) {
+      for (var f in await Glob(arg, recursive: true)
+          .listFileSystem(const LocalFileSystem())
+          .toList()) {
         if (isFileOk(f)) {
           files.add(f.path);
         }
@@ -51,18 +53,19 @@ If you specify a directory, it will match ALL files in that directory recursivel
     stdin.readLineSync();
   }
 
-  var transformer = replace(regexp, replacement, all: true, caseSensitive: false);
+  var transformer =
+      replace(regexp, replacement, all: true, caseSensitive: false);
   for (var f in files) {
     print(f);
     try {
-      var contents = (await asStream(File(f)).transform<String>(transformer).toList()).first;
+      var contents =
+          (await asStream(File(f)).transform<String>(transformer).toList())
+              .first;
       File(f).writeAsStringSync(contents);
     } catch (x) {
       stderr.writeln(x);
     }
-
   }
-
 }
 
 Stream<String> asStream(FileSystemEntity f) async* {
@@ -72,18 +75,18 @@ Stream<String> asStream(FileSystemEntity f) async* {
 bool isFileOk(FileSystemEntity f) {
   if (!(f is File)) return false;
   if (!f.existsSync()) return false;
-  
+
   // skip things under the .git directory
   var pieces = f.path.split(Platform.pathSeparator);
   if (pieces.contains('.git')) return false;
-  
+
   var name = pieces.last;
-  
+
   // allowed dotfiles
   if (allowedDotfiles.contains(name)) return true;
-  
+
   // skip other dotfiles
   if (name.startsWith('.')) return false;
-  
+
   return true;
 }
