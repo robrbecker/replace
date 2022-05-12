@@ -34,12 +34,16 @@ If you specify a directory, it will match ALL files in that directory recursivel
         }
       }
     } else {
-      for (var f in await Glob(arg, recursive: true)
-          .listFileSystem(const LocalFileSystem())
-          .toList()) {
-        if (isFileOk(f)) {
-          files.add(f.path);
+      try {
+        for (var f in await Glob(arg, recursive: true)
+            .listFileSystem(const LocalFileSystem())
+            .toList()) {
+          if (isFileOk(f)) {
+            files.add(f.path);
+          }
         }
+      } catch (x) {
+        print(x);
       }
     }
   }
