@@ -30,7 +30,7 @@ jobs:
           dart compile exe bin/pm.dart -o pm --target-os=linux
 
       - if: github.event_name != 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             replace
