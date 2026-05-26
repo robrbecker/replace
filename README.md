@@ -90,6 +90,7 @@ Global options:
 - `-r, --recursive` Recurse through subdirectories and process all pubspec.yaml files
 - `--fail-on-parse-error` Exit with non-zero if any pubspec.yaml cannot be parsed
 - `--[no-]tighten` Tighten is enabled by default. Use `--no-tighten` to keep explicit range output.
+- `--pub-get` Run `dart pub get` in each directory where `pubspec.yaml` was modified by the command
 
 Commands:
 
@@ -99,6 +100,7 @@ Commands:
 - `raise-max` Raise the maximum bound (exclusive) of a version range
 - `lower-max` Lower the maximum bound (exclusive) of a version range
 - `set-sdk` Set `environment.sdk` constraint exactly as provided
+- `set-asdf-dart` Read `environment.sdk` and run `asdf set dart <dart3 version>` (Dart 3, default `3.11.6`, overridable with `--dart-3-version`) or `asdf set dart 2.19.6` (Dart 2)
 - `raise-min-sdk` Raise the minimum `environment.sdk` bound (inclusive)
 - `raise-max-sdk` Raise the maximum `environment.sdk` bound (exclusive)
 - `tighten` Raise all dependency minimums to resolved versions from `pubspec.lock` (or a provided lockfile path)
@@ -110,10 +112,12 @@ Notes:
 - SDK commands update `environment.sdk` only
 - `set` accepts any valid Dart version constraint, for example `^1.9.0` or `'>=1.9.0 <2.0.0'`
 - `set-sdk` accepts any valid Dart SDK constraint, for example `'>=3.3.0 <4.0.0'`
+- `set-asdf-dart` uses `environment.sdk` from the current `pubspec.yaml` (or all discovered pubspec files with `-r`) and accepts optional `--dart-3-version` (default `3.11.6`)
 - `raise-min`, `raise-max`, and `lower-max` expect a specific semantic version, for example `1.9.1`
 - `raise-min-sdk` and `raise-max-sdk` expect a specific semantic version, for example `3.4.0`
 - Tightening is enabled by default and only rewrites when the updated range is exactly equivalent to a caret constraint
-- `tighten` reads `pubspec.lock` in the current directory by default and applies the equivalent of `raise-min <dep> <locked-version> --tighten` for each locked package
+- `--pub-get` only runs in directories where a command actually changed `pubspec.yaml`
+- `tighten` reads `pubspec.lock` in the current directory by default (or each pubspec directory when used with `-r`) and applies the equivalent of `raise-min <dep> <locked-version> --tighten` for each locked package
   - `'>=3.0.0 <4.0.0'` becomes `^3.0.0`
   - `'>=0.18.2 <0.19.0'` becomes `^0.18.2`
   - `'>=1.2.3 <4.0.0'` stays as a range (not equivalent to a caret constraint)
@@ -216,6 +220,12 @@ Lower max version and fail if any pubspec is malformed:
 pm lower-max path 2.5.0 -r --fail-on-parse-error
 ```
 
+Raise minimum and run `dart pub get` for each modified pubspec directory:
+
+```sh
+pm raise-min path 1.9.1 -r --pub-get
+```
+
 Remove multiple dependencies in a single command:
 
 ```sh
@@ -248,6 +258,18 @@ Set SDK constraint:
 
 ```sh
 pm set-sdk '>=3.3.0 <4.0.0'
+```
+
+Set local asdf Dart version from SDK constraint:
+
+```sh
+pm set-asdf-dart
+```
+
+Set local asdf Dart version with an overridden Dart 3 target:
+
+```sh
+pm set-asdf-dart --dart-3-version 3.12.1
 ```
 
 Raise SDK minimum recursively across a monorepo:

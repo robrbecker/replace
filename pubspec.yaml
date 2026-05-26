@@ -1,6 +1,6 @@
 name: replace
-version: 1.2.2
-description: An easy to use cross-platform regex replace command line util.
+version: 1.2.3
+description: An easy to use cross-platform regex replace command line util and pm CLI to modify pubspec.yaml files.
 repository: https://github.com/robrbecker/replace
 
 environment:

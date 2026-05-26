@@ -1,3 +1,16 @@
+## [1.2.3] - 2026-05-26
+### Added
+- Added `pm set-asdf-dart` to read `environment.sdk` from `pubspec.yaml` and run `asdf set dart` for Dart 2 (`2.19.6`) or Dart 3.
+- Added `--dart-3-version` to `pm set-asdf-dart` so the Dart 3 version can be overridden (default: `3.11.6`).
+- Added global `--pub-get` to run `dart pub get` in directories where a command modified `pubspec.yaml`.
+
+### Updated
+- Updated `pm` tests to cover `set-asdf-dart` behavior for Dart 2, Dart 3, and custom `--dart-3-version` values.
+- Updated README command docs and examples for `set-asdf-dart` and `--dart-3-version`.
+- Updated `pm` tests and docs for `--pub-get` behavior on changed and unchanged pubspecs.
+- Updated `set-asdf-dart` to support recursive mode (`-r`) across discovered `pubspec.yaml` files.
+- Updated `tighten -r` to use each pubspec directory's `pubspec.lock` by default.
+
 ## [1.2.0] - 2026-04-13
 ### Added
 - Added `pm remove` to remove one or more packages from `dependencies` and `dev_dependencies`.

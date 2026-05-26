@@ -22,18 +22,6 @@ jobs:
       - name: Install dependencies
         run: dart pub get
 
-      - name: Build generated files
-        run: dart run build_runner build --delete-conflicting-outputs
-
-      - name: Verify generated files are up to date
-        run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "Generated files are not up to date."
-            echo "Run: dart run build_runner build --delete-conflicting-outputs"
-            git --no-pager diff
-            # exit 1
-          fi
-
       - name: Analyze
         run: dart analyze .
 

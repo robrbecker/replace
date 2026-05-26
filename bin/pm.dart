@@ -14,8 +14,15 @@ const _commandRaiseMin = 'raise-min';
 const _commandRaiseMinSdk = 'raise-min-sdk';
 const _commandRemove = 'remove';
 const _commandSet = 'set';
+const _commandSetAsdfDart = 'set-asdf-dart';
 const _commandSetSdk = 'set-sdk';
 const _commandTighten = 'tighten';
+
+const _dart2Version = '2.19.6';
+const _dart3Version = '3.11.6';
+const _asdfExecutableEnv = 'PM_ASDF_BIN';
+const _dartExecutableEnv = 'PM_DART_BIN';
+const _dart3VersionOption = 'dart-3-version';
 
 const _usageHeader = 'Usage: dart run pm <command> [arguments]';
 
@@ -65,6 +72,8 @@ Future<int> _run(List<String> args) async {
     return 64;
   }
 
+  final runPubGet = results['pub-get'] as bool;
+
   if (commandName == _commandTighten) {
     final rest = command.rest;
     if (rest.length > 1) {
@@ -78,28 +87,10 @@ Future<int> _run(List<String> args) async {
 
     final failOnParseError = results['fail-on-parse-error'] as bool;
     final recursive = results['recursive'] as bool;
-    final lockfilePath = rest.isEmpty ? 'pubspec.lock' : rest.single.trim();
-    if (lockfilePath.isEmpty) {
+    final requestedLockfilePath = rest.isEmpty ? null : rest.single.trim();
+    if (requestedLockfilePath != null && requestedLockfilePath.isEmpty) {
       stderr.writeln('Lockfile path must not be empty.');
       return 64;
-    }
-
-    final lockfile = File(lockfilePath);
-    if (!lockfile.existsSync()) {
-      stderr.writeln('Lockfile not found: ${lockfile.path}');
-      return 64;
-    }
-
-    Map<String, String> lockedVersions;
-    try {
-      lockedVersions = _readLockedDependencyVersions(lockfile);
-    } on FormatException catch (e) {
-      stderr.writeln('Unable to parse ${lockfile.path}: ${e.message}');
-      return 64;
-    }
-
-    if (lockedVersions.isEmpty) {
-      return 0;
     }
 
     final pubspecFiles = _findPubspecFiles(recursive: recursive);
@@ -108,7 +99,40 @@ Future<int> _run(List<String> args) async {
     }
 
     var hadParseError = false;
+    final changedPubspecDirectories = <String>{};
+    final lockedVersionsCache = <String, Map<String, String>>{};
     for (final path in pubspecFiles) {
+      final pubspecDirectory = File(path).parent;
+      final lockfilePath = requestedLockfilePath == null
+          ? '${pubspecDirectory.path}${Platform.pathSeparator}pubspec.lock'
+          : requestedLockfilePath;
+      final lockfile = File(lockfilePath);
+      if (!lockfile.existsSync()) {
+        if (recursive && requestedLockfilePath == null) {
+          continue;
+        }
+        stderr.writeln('Lockfile not found: ${lockfile.path}');
+        return 64;
+      }
+
+      final lockfileCacheKey = lockfile.absolute.path;
+      Map<String, String> lockedVersions;
+      if (lockedVersionsCache.containsKey(lockfileCacheKey)) {
+        lockedVersions = lockedVersionsCache[lockfileCacheKey]!;
+      } else {
+        try {
+          lockedVersions = _readLockedDependencyVersions(lockfile);
+        } on FormatException catch (e) {
+          stderr.writeln('Unable to parse ${lockfile.path}: ${e.message}');
+          return 64;
+        }
+        lockedVersionsCache[lockfileCacheKey] = lockedVersions;
+      }
+
+      if (lockedVersions.isEmpty) {
+        continue;
+      }
+
       PubSpec pubspec;
       try {
         pubspec = PubSpec.loadFromPath(path);
@@ -155,13 +179,22 @@ Future<int> _run(List<String> args) async {
       }
 
       pubspec.saveTo(path);
+      changedPubspecDirectories.add(pubspecDirectory.path);
       for (final message in updateMessages) {
-        stdout.writeln(message);
+        stdout.writeln('$path: $message');
       }
     }
 
     if (failOnParseError && hadParseError) {
       return 1;
+    }
+
+    final pubGetExitCode = await _runPubGetForDirectories(
+      enabled: runPubGet,
+      directories: changedPubspecDirectories,
+    );
+    if (pubGetExitCode != 0) {
+      return pubGetExitCode;
     }
 
     return 0;
@@ -197,6 +230,7 @@ Future<int> _run(List<String> args) async {
     }
 
     var hadParseError = false;
+    final changedPubspecDirectories = <String>{};
     for (final path in pubspecFiles) {
       PubSpec pubspec;
       try {
@@ -223,9 +257,155 @@ Future<int> _run(List<String> args) async {
       }
 
       pubspec.saveTo(path);
+      changedPubspecDirectories.add(File(path).parent.path);
       for (final message in updateMessages) {
-        stdout.writeln(message);
+        stdout.writeln('$path: $message');
       }
+    }
+
+    if (failOnParseError && hadParseError) {
+      return 1;
+    }
+
+    final pubGetExitCode = await _runPubGetForDirectories(
+      enabled: runPubGet,
+      directories: changedPubspecDirectories,
+    );
+    if (pubGetExitCode != 0) {
+      return pubGetExitCode;
+    }
+
+    return 0;
+  }
+
+  if (commandName == _commandSetAsdfDart) {
+    final rest = command.rest;
+    if (rest.isNotEmpty) {
+      stderr.writeln('Command "$commandName" does not accept arguments.');
+      stderr.writeln('');
+      _printUsage(parser);
+      return 64;
+    }
+
+    final requestedDart3Version =
+        (command[_dart3VersionOption] as String).trim();
+    if (requestedDart3Version.isEmpty) {
+      stderr.writeln('Option --$_dart3VersionOption must not be empty.');
+      return 64;
+    }
+
+    final semver.Version dart2Probe;
+    final semver.Version dart3Probe;
+    try {
+      dart2Probe = semver.Version.parse(_dart2Version);
+      dart3Probe = semver.Version.parse(requestedDart3Version);
+    } on FormatException catch (e) {
+      stderr.writeln(
+        'Invalid version for --$_dart3VersionOption "$requestedDart3Version": ${e.message}',
+      );
+      return 64;
+    }
+
+    final recursive = results['recursive'] as bool;
+    final failOnParseError = results['fail-on-parse-error'] as bool;
+    final pubspecFiles = _findPubspecFiles(recursive: recursive);
+    if (pubspecFiles.isEmpty) {
+      if (recursive) {
+        return 0;
+      }
+      final pubspecPath =
+          '${Directory.current.path}${Platform.pathSeparator}pubspec.yaml';
+      stderr.writeln('pubspec.yaml not found: $pubspecPath');
+      return 64;
+    }
+
+    final asdfExecutable = Platform.environment[_asdfExecutableEnv] ?? 'asdf';
+    var hadParseError = false;
+    for (final pubspecPath in pubspecFiles) {
+      final String sdkConstraintText;
+      try {
+        final pubspec = PubSpec.loadFromPath(pubspecPath);
+        sdkConstraintText = pubspec.environment.sdk.trim();
+      } catch (e) {
+        hadParseError = true;
+        stderr.writeln('Unable to parse $pubspecPath: $e');
+        if (failOnParseError) {
+          return 1;
+        }
+        continue;
+      }
+
+      if (sdkConstraintText.isEmpty) {
+        hadParseError = true;
+        stderr.writeln('$pubspecPath environment.sdk must not be empty.');
+        if (failOnParseError) {
+          return 1;
+        }
+        continue;
+      }
+
+      final semver.VersionConstraint sdkConstraint;
+      try {
+        sdkConstraint = semver.VersionConstraint.parse(
+          _stripMatchingQuotes(sdkConstraintText),
+        );
+      } on FormatException catch (e) {
+        hadParseError = true;
+        stderr.writeln(
+          'Invalid SDK constraint "$sdkConstraintText" in $pubspecPath: ${e.message}',
+        );
+        if (failOnParseError) {
+          return 1;
+        }
+        continue;
+      }
+
+      final supportsDart2 = sdkConstraint.allows(dart2Probe);
+      final supportsDart3 = sdkConstraint.allows(dart3Probe);
+
+      late String dartVersionToSet;
+      if (!supportsDart2 && supportsDart3) {
+        dartVersionToSet = requestedDart3Version;
+      } else if (supportsDart2) {
+        dartVersionToSet = _dart2Version;
+      } else {
+        hadParseError = true;
+        stderr.writeln(
+          'Unable to determine Dart major from environment.sdk "$sdkConstraintText" in $pubspecPath.',
+        );
+        if (failOnParseError) {
+          return 1;
+        }
+        continue;
+      }
+
+      final targetDirectory = File(pubspecPath).parent.path;
+      final setResult = await Process.run(
+        asdfExecutable,
+        ['set', 'dart', dartVersionToSet],
+        workingDirectory: targetDirectory,
+      );
+
+      final commandOutput = (setResult.stdout as String).trim();
+      if (commandOutput.isNotEmpty) {
+        stdout.writeln(commandOutput);
+      }
+
+      final commandError = (setResult.stderr as String).trim();
+      if (commandError.isNotEmpty) {
+        stderr.writeln(commandError);
+      }
+
+      if (setResult.exitCode != 0) {
+        stderr.writeln(
+          'Failed to run: asdf set dart $dartVersionToSet in $targetDirectory',
+        );
+        return setResult.exitCode;
+      }
+
+      stdout.writeln(
+        'Set Dart to $dartVersionToSet in $targetDirectory based on SDK constraint $sdkConstraintText',
+      );
     }
 
     if (failOnParseError && hadParseError) {
@@ -304,6 +484,7 @@ Future<int> _run(List<String> args) async {
   }
 
   var hadParseError = false;
+  final changedPubspecDirectories = <String>{};
   for (final path in pubspecFiles) {
     PubSpec pubspec;
     try {
@@ -356,13 +537,80 @@ Future<int> _run(List<String> args) async {
     }
 
     pubspec.saveTo(path);
+    changedPubspecDirectories.add(File(path).parent.path);
     for (final message in updateMessages) {
-      stdout.writeln(message);
+      stdout.writeln('$path: $message');
     }
   }
 
   if (failOnParseError && hadParseError) {
     return 1;
+  }
+
+  final pubGetExitCode = await _runPubGetForDirectories(
+    enabled: runPubGet,
+    directories: changedPubspecDirectories,
+  );
+  if (pubGetExitCode != 0) {
+    return pubGetExitCode;
+  }
+
+  return 0;
+}
+
+Future<int> _runPubGetForDirectories({
+  required bool enabled,
+  required Set<String> directories,
+}) async {
+  if (!enabled || directories.isEmpty) {
+    return 0;
+  }
+
+  final dartExecutable = Platform.environment[_dartExecutableEnv] ?? 'dart';
+  final sortedDirectories = directories.toList()..sort();
+  for (final directory in sortedDirectories) {
+    final versionResult = await Process.run(
+      dartExecutable,
+      ['--version'],
+      workingDirectory: directory,
+    );
+
+    final versionOutput = (versionResult.stdout as String).trim();
+    if (versionOutput.isNotEmpty) {
+      stdout.writeln(versionOutput);
+    }
+
+    final versionError = (versionResult.stderr as String).trim();
+    if (versionError.isNotEmpty) {
+      stderr.writeln(versionError);
+    }
+
+    if (versionResult.exitCode != 0) {
+      stderr.writeln('Failed to run: dart --version in $directory');
+      return versionResult.exitCode;
+    }
+
+    stdout.writeln('Running dart pub get in $directory');
+    final result = await Process.run(
+      dartExecutable,
+      ['pub', 'get'],
+      workingDirectory: directory,
+    );
+
+    final commandOutput = (result.stdout as String).trim();
+    if (commandOutput.isNotEmpty) {
+      stdout.writeln(commandOutput);
+    }
+
+    final commandError = (result.stderr as String).trim();
+    if (commandError.isNotEmpty) {
+      stderr.writeln(commandError);
+    }
+
+    if (result.exitCode != 0) {
+      stderr.writeln('Failed to run: dart pub get in $directory');
+      return result.exitCode;
+    }
   }
 
   return 0;
@@ -589,6 +837,13 @@ ArgParser _buildParser() {
       defaultsTo: true,
       help:
           'When updating range constraints, rewrite equivalent ranges as caret constraints (for example >=3.0.0 <4.0.0 to ^3.0.0). Disable with --no-tighten.',
+    )
+    ..addFlag(
+      'pub-get',
+      aliases: ['pubget'],
+      negatable: false,
+      help:
+          'Run dart pub get in each directory containing a pubspec.yaml that was modified by the command.',
     );
 
   for (final command in [
@@ -599,11 +854,19 @@ ArgParser _buildParser() {
     _commandRaiseMin,
     _commandRaiseMinSdk,
     _commandSet,
+    _commandSetAsdfDart,
     _commandSetSdk,
     _commandTighten,
   ]) {
     parser.addCommand(command);
   }
+
+  parser.commands[_commandSetAsdfDart]?.addOption(
+    _dart3VersionOption,
+    defaultsTo: _dart3Version,
+    help:
+        'Dart 3 version to set when environment.sdk requires Dart 3 (default: $_dart3Version).',
+  );
 
   return parser;
 }
@@ -627,6 +890,8 @@ void _printUsage(ArgParser parser) {
   stdout.writeln('(sdk)');
   stdout.writeln(
       '  set-sdk     Set the SDK version constraint in environment.sdk.');
+  stdout.writeln(
+      '  set-asdf-dart Set local asdf Dart version from environment.sdk (Dart 3 -> --dart-3-version, default 3.11.6; Dart 2 -> 2.19.6).');
   stdout.writeln(
       '  raise-max-sdk Raise the maximum allowed SDK version (exclusive) in environment.sdk.');
   stdout.writeln(

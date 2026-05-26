@@ -112,6 +112,167 @@ void main() {
       expect(result.stderr.toString(), contains('Unable to parse'));
     });
 
+    test('set-asdf-dart uses Dart 3 when sdk requires Dart 3', () async {
+      final workDir = _writePubspecFixture(scratchRoot, '''
+name: sdk_dart3_fixture
+version: 0.0.1
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+''');
+
+      final asdfBinary = _createFakeAsdfBin(workDir, expectedVersion: '3.11.6');
+      final result = await _runPm(
+        ['set-asdf-dart'],
+        workingDirectory: workDir.path,
+        environment: {
+          'PM_ASDF_BIN': asdfBinary.path,
+        },
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      expect(result.stdout.toString(), contains('Set Dart to 3.11.6'));
+      expect(_readAsdfLog(workDir), equals('set dart 3.11.6\n'));
+    });
+
+    test('set-asdf-dart uses Dart 2 when sdk allows Dart 2', () async {
+      final workDir = _writePubspecFixture(scratchRoot, '''
+name: sdk_dart2_fixture
+version: 0.0.1
+environment:
+  sdk: '>=2.19.0 <3.0.0'
+''');
+
+      final asdfBinary = _createFakeAsdfBin(workDir, expectedVersion: '2.19.6');
+      final result = await _runPm(
+        ['set-asdf-dart'],
+        workingDirectory: workDir.path,
+        environment: {
+          'PM_ASDF_BIN': asdfBinary.path,
+        },
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      expect(result.stdout.toString(), contains('Set Dart to 2.19.6'));
+      expect(_readAsdfLog(workDir), equals('set dart 2.19.6\n'));
+    });
+
+    test('set-asdf-dart allows overriding Dart 3 version', () async {
+      final workDir = _writePubspecFixture(scratchRoot, '''
+name: sdk_dart3_override_fixture
+version: 0.0.1
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+''');
+
+      final asdfBinary = _createFakeAsdfBin(workDir, expectedVersion: '3.12.1');
+      final result = await _runPm(
+        ['set-asdf-dart', '--dart-3-version', '3.12.1'],
+        workingDirectory: workDir.path,
+        environment: {
+          'PM_ASDF_BIN': asdfBinary.path,
+        },
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      expect(result.stdout.toString(), contains('Set Dart to 3.12.1'));
+      expect(_readAsdfLog(workDir), equals('set dart 3.12.1\n'));
+    });
+
+    test('set-asdf-dart supports recursive mode', () async {
+      final workDir = _writePubspecFixture(scratchRoot, '''
+name: sdk_recursive_set_asdf_root
+version: 0.0.1
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+''');
+      final nestedDir = Directory(p.join(workDir.path, 'packages', 'nested'))
+        ..createSync(recursive: true);
+      File(p.join(nestedDir.path, 'pubspec.yaml')).writeAsStringSync('''
+name: sdk_recursive_set_asdf_nested
+version: 0.0.1
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+''');
+
+      final asdfBinary = _createCwdLoggingAsdfBin(workDir);
+      final result = await _runPm(
+        ['set-asdf-dart', '-r'],
+        workingDirectory: workDir.path,
+        environment: {
+          'PM_ASDF_BIN': asdfBinary.path,
+        },
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      final calls = _readAsdfCwdLog(workDir)
+          .split('\n')
+          .where((line) => line.trim().isNotEmpty)
+          .toList();
+      expect(calls, hasLength(2));
+      expect(calls.any((line) => line.endsWith(workDir.path)), isTrue);
+      expect(calls.any((line) => line.endsWith(nestedDir.path)), isTrue);
+    });
+
+    test('--pub-get runs dart pub get when pubspec is modified', () async {
+      final workDir = _copyFixture('basic', scratchRoot);
+      final dartBinary = _createFakeDartBin(workDir);
+
+      final result = await _runPm(
+        ['set', 'path', '1.9.1', '--pub-get'],
+        workingDirectory: workDir.path,
+        environment: {
+          'PM_DART_BIN': dartBinary.path,
+        },
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      expect(result.stdout.toString(), contains('Dart SDK version: fake'));
+      final lines = _readDartPubGetLog(workDir)
+          .split('\n')
+          .where((line) => line.trim().isNotEmpty)
+          .toList();
+      expect(lines, hasLength(1));
+      expect(p.basename(lines.single), equals(p.basename(workDir.path)));
+    });
+
+    test('--pub-get does not run dart pub get when pubspec is unchanged',
+        () async {
+      final workDir = _copyFixture('basic', scratchRoot);
+      final dartBinary = _createFakeDartBin(workDir);
+
+      final result = await _runPm(
+        ['set', 'path', '^1.9.0', '--pub-get'],
+        workingDirectory: workDir.path,
+        environment: {
+          'PM_DART_BIN': dartBinary.path,
+        },
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      expect(_readDartPubGetLog(workDir), isEmpty);
+    });
+
+    test('--pubget alias runs dart pub get when pubspec is modified', () async {
+      final workDir = _copyFixture('basic', scratchRoot);
+      final dartBinary = _createFakeDartBin(workDir);
+
+      final result = await _runPm(
+        ['set', 'path', '1.9.1', '--pubget'],
+        workingDirectory: workDir.path,
+        environment: {
+          'PM_DART_BIN': dartBinary.path,
+        },
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      final lines = _readDartPubGetLog(workDir)
+          .split('\n')
+          .where((line) => line.trim().isNotEmpty)
+          .toList();
+      expect(lines, hasLength(1));
+      expect(p.basename(lines.single), equals(p.basename(workDir.path)));
+    });
+
     test('set updates plain and hosted dependency styles', () async {
       final workDir = _copyFixture('basic', scratchRoot);
 
@@ -384,6 +545,41 @@ dependencies:
       expect(_hasConstraint(content, 'version', '>=0.2.3 <1.0.0'), isTrue);
       expect(_hasConstraint(content, 'test', '^1.25.15'), isTrue);
     });
+
+    test('tighten recursive uses each pubspec directory lockfile', () async {
+      final workDir = _copyFixture('tighten_basic', scratchRoot);
+      final nestedDir = Directory(p.join(workDir.path, 'packages', 'nested'))
+        ..createSync(recursive: true);
+      File(p.join(nestedDir.path, 'pubspec.yaml')).writeAsStringSync('''
+name: nested_tighten_fixture
+version: 0.0.1
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+dependencies:
+  path: '>=1.8.0 <2.0.0'
+''');
+
+      _writeTightenLockfile(workDir, pathVersion: '1.9.1');
+      _writeTightenLockfile(
+        nestedDir,
+        pathVersion: '1.10.0',
+      );
+
+      final result = await _runPm(
+        ['tighten', '-r'],
+        workingDirectory: workDir.path,
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+
+      final rootContent =
+          File(p.join(workDir.path, 'pubspec.yaml')).readAsStringSync();
+      final nestedContent =
+          File(p.join(nestedDir.path, 'pubspec.yaml')).readAsStringSync();
+
+      expect(_hasConstraint(rootContent, 'path', '^1.9.1'), isTrue);
+      expect(_hasConstraint(nestedContent, 'path', '^1.10.0'), isTrue);
+    });
   });
 }
 
@@ -436,6 +632,7 @@ dependencies:
 void _writeTightenLockfile(
   Directory root, {
   String relativePath = 'pubspec.lock',
+  String pathVersion = '1.9.1',
 }) {
   File(p.join(root.path, relativePath))
     ..createSync(recursive: true)
@@ -466,7 +663,7 @@ packages:
       sha256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       url: "https://pub.dev"
     source: hosted
-    version: "1.9.1"
+    version: "$pathVersion"
   test:
     dependency: "direct dev"
     description:
@@ -498,6 +695,7 @@ void _copyDirectory(Directory source, Directory target) {
 Future<ProcessResult> _runPm(
   List<String> args, {
   required String workingDirectory,
+  Map<String, String>? environment,
 }) {
   final packageConfig =
       p.join(_repoRoot.path, '.dart_tool', 'package_config.json');
@@ -507,7 +705,87 @@ Future<ProcessResult> _runPm(
     'dart',
     ['--packages=$packageConfig', script, ...args],
     workingDirectory: workingDirectory,
+    environment: environment,
   );
+}
+
+File _createFakeAsdfBin(Directory workDir, {required String expectedVersion}) {
+  final asdfScript = File(p.join(workDir.path, 'asdf_stub.sh'));
+  final logPath = p.join(workDir.path, '.asdf_calls.log');
+
+  asdfScript.writeAsStringSync('''
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s %s %s\n' "\${1:-}" "\${2:-}" "\${3:-}" >> "$logPath"
+if [[ "\${1:-}" != "set" || "\${2:-}" != "dart" || "\${3:-}" != "$expectedVersion" ]]; then
+  echo "unexpected args: $expectedVersion expected" >&2
+  exit 9
+fi
+''');
+  Process.runSync('chmod', ['+x', asdfScript.path]);
+  return asdfScript;
+}
+
+String _readAsdfLog(Directory workDir) {
+  final logFile = File(p.join(workDir.path, '.asdf_calls.log'));
+  if (!logFile.existsSync()) {
+    return '';
+  }
+  return logFile.readAsStringSync();
+}
+
+File _createCwdLoggingAsdfBin(Directory workDir) {
+  final asdfScript = File(p.join(workDir.path, 'asdf_cwd_stub.sh'));
+  final logPath = p.join(workDir.path, '.asdf_cwd_calls.log');
+
+  asdfScript.writeAsStringSync('''
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" != "set" || "\${2:-}" != "dart" ]]; then
+  echo "unexpected args: \${1:-} \${2:-}" >&2
+  exit 11
+fi
+pwd >> "$logPath"
+''');
+  Process.runSync('chmod', ['+x', asdfScript.path]);
+  return asdfScript;
+}
+
+String _readAsdfCwdLog(Directory workDir) {
+  final logFile = File(p.join(workDir.path, '.asdf_cwd_calls.log'));
+  if (!logFile.existsSync()) {
+    return '';
+  }
+  return logFile.readAsStringSync();
+}
+
+File _createFakeDartBin(Directory workDir) {
+  final dartScript = File(p.join(workDir.path, 'dart_stub.sh'));
+  final logPath = p.join(workDir.path, '.dart_pub_get_calls.log');
+
+  dartScript.writeAsStringSync('''
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == "--version" ]]; then
+  echo "Dart SDK version: fake"
+  exit 0
+fi
+if [[ "\${1:-}" != "pub" || "\${2:-}" != "get" ]]; then
+  echo "unexpected args: \${1:-} \${2:-}" >&2
+  exit 10
+fi
+pwd >> "$logPath"
+''');
+  Process.runSync('chmod', ['+x', dartScript.path]);
+  return dartScript;
+}
+
+String _readDartPubGetLog(Directory workDir) {
+  final logFile = File(p.join(workDir.path, '.dart_pub_get_calls.log'));
+  if (!logFile.existsSync()) {
+    return '';
+  }
+  return logFile.readAsStringSync();
 }
 
 Directory get _repoRoot => Directory.current;
