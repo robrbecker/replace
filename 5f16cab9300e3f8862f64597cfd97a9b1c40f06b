@@ -1,0 +1,27 @@
+CHANGELOG.md
+  3870d62a13058d65 1-5
+bin/pm.dart
+  3870d62a13058d65 366-367,369-370,372-373,386-414,602,626-652,679-709
+pubspec.yaml
+  3870d62a13058d65 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "base_commit_sha": "5f16cab9300e3f8862f64597cfd97a9b1c40f06b",
+  "git_ai_version": "0.1.0",
+  "prompts": {
+    "3870d62a13058d65": {
+      "agent_id": {
+        "tool": "claude-code",
+        "id": "438bb136-2798-4dff-b048-21d0092dae48",
+        "model": "claude-opus-4-6[1m]"
+      },
+      "human_author": "rob.becker@workiva.com",
+      "messages": [],
+      "total_additions": 100,
+      "total_deletions": 4,
+      "accepted_lines": 100,
+      "overriden_lines": 0
+    }
+  }
+}
