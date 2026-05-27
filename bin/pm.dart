@@ -363,11 +363,14 @@ Future<int> _run(List<String> args) async {
       final supportsDart2 = sdkConstraint.allows(dart2Probe);
       final supportsDart3 = sdkConstraint.allows(dart3Probe);
 
-      late String dartVersionToSet;
+      late String detectedDartVersion;
+      late int detectedDartMajor;
       if (!supportsDart2 && supportsDart3) {
-        dartVersionToSet = requestedDart3Version;
+        detectedDartVersion = requestedDart3Version;
+        detectedDartMajor = 3;
       } else if (supportsDart2) {
-        dartVersionToSet = _dart2Version;
+        detectedDartVersion = _dart2Version;
+        detectedDartMajor = 2;
       } else {
         hadParseError = true;
         stderr.writeln(
@@ -380,6 +383,35 @@ Future<int> _run(List<String> args) async {
       }
 
       final targetDirectory = File(pubspecPath).parent.path;
+      final toolVersionsFile = File(
+        '$targetDirectory${Platform.pathSeparator}.tool-versions',
+      );
+      final hasToolVersions = toolVersionsFile.existsSync();
+      final existingDartVersion = hasToolVersions
+          ? _readAsdfToolVersion(toolVersionsFile, 'dart')
+          : null;
+
+      int? existingDartMajor;
+      if (existingDartVersion != null) {
+        existingDartMajor = _tryParseMajorVersion(existingDartVersion);
+        if (existingDartMajor == null) {
+          stderr.writeln(
+            'Unable to parse existing dart version "$existingDartVersion" in ${toolVersionsFile.path}; skipping asdf set to avoid overwriting.',
+          );
+          continue;
+        }
+      }
+
+      if (hasToolVersions &&
+          existingDartVersion != null &&
+          existingDartMajor != detectedDartMajor) {
+        stdout.writeln(
+          'Keeping existing dart version $existingDartVersion in ${toolVersionsFile.path} because detected major is $detectedDartMajor.',
+        );
+        continue;
+      }
+
+      final dartVersionToSet = existingDartVersion ?? detectedDartVersion;
       final setResult = await Process.run(
         asdfExecutable,
         ['set', 'dart', dartVersionToSet],
@@ -567,6 +599,7 @@ Future<int> _runPubGetForDirectories({
   }
 
   final dartExecutable = Platform.environment[_dartExecutableEnv] ?? 'dart';
+  final asdfExecutable = Platform.environment[_asdfExecutableEnv] ?? 'asdf';
   final sortedDirectories = directories.toList()..sort();
   for (final directory in sortedDirectories) {
     final versionResult = await Process.run(
@@ -588,6 +621,33 @@ Future<int> _runPubGetForDirectories({
     if (versionResult.exitCode != 0) {
       stderr.writeln('Failed to run: dart --version in $directory');
       return versionResult.exitCode;
+    }
+
+    final toolVersionsPath =
+        '$directory${Platform.pathSeparator}.tool-versions';
+    final toolVersionsFile = File(toolVersionsPath);
+    if (toolVersionsFile.existsSync()) {
+      stdout.writeln('Running asdf install in $directory');
+      final asdfInstallResult = await Process.run(
+        asdfExecutable,
+        ['install'],
+        workingDirectory: directory,
+      );
+
+      final asdfInstallOutput = (asdfInstallResult.stdout as String).trim();
+      if (asdfInstallOutput.isNotEmpty) {
+        stdout.writeln(asdfInstallOutput);
+      }
+
+      final asdfInstallError = (asdfInstallResult.stderr as String).trim();
+      if (asdfInstallError.isNotEmpty) {
+        stderr.writeln(asdfInstallError);
+      }
+
+      if (asdfInstallResult.exitCode != 0) {
+        stderr.writeln('Failed to run: asdf install in $directory');
+        return asdfInstallResult.exitCode;
+      }
     }
 
     stdout.writeln('Running dart pub get in $directory');
@@ -614,6 +674,37 @@ Future<int> _runPubGetForDirectories({
   }
 
   return 0;
+}
+
+String? _readAsdfToolVersion(File toolVersionsFile, String toolName) {
+  final lines = toolVersionsFile.readAsLinesSync();
+  for (final line in lines) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length < 2 || parts.first != toolName) {
+      continue;
+    }
+
+    return parts[1].trim();
+  }
+
+  return null;
+}
+
+int? _tryParseMajorVersion(String versionText) {
+  try {
+    return semver.Version.parse(versionText).major;
+  } on FormatException {
+    final match = RegExp(r'^(\d+)').firstMatch(versionText.trim());
+    if (match == null) {
+      return null;
+    }
+    return int.tryParse(match.group(1)!);
+  }
 }
 
 List<String> _applyToDependencies(

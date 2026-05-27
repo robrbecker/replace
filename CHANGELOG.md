@@ -1,3 +1,8 @@
+## [1.2.4] - 2026-05-26
+### Updated
+- Updated `--pub-get` flow to run `asdf install` before `dart pub get` when a `.tool-versions` file exists in the pubspec directory.
+- Updated `pm set-asdf-dart` to read existing `.tool-versions` and only overwrite Dart when the file is missing or the existing Dart major matches the detected SDK major.
+
 ## [1.2.3] - 2026-05-26
 ### Added
 - Added `pm set-asdf-dart` to read `environment.sdk` from `pubspec.yaml` and run `asdf set dart` for Dart 2 (`2.19.6`) or Dart 3.

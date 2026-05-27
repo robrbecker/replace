@@ -1,5 +1,5 @@
 name: replace
-version: 1.2.3
+version: 1.2.4
 description: An easy to use cross-platform regex replace command line util and pm CLI to modify pubspec.yaml files.
 repository: https://github.com/robrbecker/replace
 
