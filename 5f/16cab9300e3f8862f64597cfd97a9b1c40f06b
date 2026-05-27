@@ -1,0 +1,18 @@
+CHANGELOG.md
+  h_3ae32f2e484ef5 1-5
+bin/pm.dart
+  h_3ae32f2e484ef5 366-367,369-370,372-373,386-414,602,626-650,679-707
+pubspec.yaml
+  h_3ae32f2e484ef5 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5f16cab9300e3f8862f64597cfd97a9b1c40f06b",
+  "prompts": {},
+  "humans": {
+    "h_3ae32f2e484ef5": {
+      "author": "Rob Becker <rob.becker@workiva.com>"
+    }
+  }
+}
